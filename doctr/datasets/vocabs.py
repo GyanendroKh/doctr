@@ -79,3 +79,5 @@ VOCABS["multilingual"] = "".join(
         + "§"
     )
 )
+
+VOCABS['meiteimayek'] = "ꯀ ꯁ ꯂ ꯃ ꯄ ꯅ ꯆ ꯇ ꯈ ꯉ ꯊ ꯋ ꯌ ꯍ ꯎ ꯏ ꯐ ꯑ ꯒ ꯓ ꯔ ꯕ ꯖ ꯗ ꯘ ꯙ ꯚ ꯛ ꯜ ꯝ ꯞ ꯟ ꯠ ꯡ ꯢ ꯣ ꯤ  ꯥ ꯦ ꯧ ꯨ ꯩ ꯪ ꯰ ꯱ ꯲ ꯳ ꯴ ꯵ ꯶ ꯷ ꯸ ꯹ ꯫ ꯭".replace(' ', '')
