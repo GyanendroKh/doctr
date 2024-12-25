@@ -59,7 +59,7 @@ def load_pretrained_params(
         archive_path = download_from_url(url, hash_prefix=hash_prefix, cache_subdir="models", **kwargs)
 
         # Read state_dict
-        state_dict = torch.load(archive_path, map_location="cpu")
+        state_dict = torch.load(archive_path, weights_only=True, map_location="cpu")
 
         # Remove weights from the state_dict
         if ignore_keys is not None and len(ignore_keys) > 0:
