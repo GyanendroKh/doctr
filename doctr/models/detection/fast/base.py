@@ -168,8 +168,13 @@ class _FAST(BaseModel):
         """
         if any(t.dtype != np.float32 for tgt in target for t in tgt.values()):
             raise AssertionError("the expected dtype of target 'boxes' entry is 'np.float32'.")
-        if any(np.any((t[:, :4] > 1) | (t[:, :4] < 0)) for tgt in target for t in tgt.values()):
-            raise ValueError("the 'boxes' entry of the target is expected to take values between 0 & 1.")
+
+        for ti, tgt in enumerate(target):
+            for k, t in tgt.items():
+                if np.any((t[:, :4] > 1) | (t[:, :4] < 0)):
+                    target[ti][k] = np.clip(t, 0, 1)
+        # if any(np.any((t[:, :4] > 1) | (t[:, :4] < 0)) for tgt in target for t in tgt.values()):
+        #     raise ValueError("the 'boxes' entry of the target is expected to take values between 0 & 1.")
 
         h: int
         w: int
