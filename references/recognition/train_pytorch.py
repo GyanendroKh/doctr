@@ -22,8 +22,6 @@ from torchvision.transforms.v2 import (
     Compose,
     Normalize,
     RandomGrayscale,
-    RandomPerspective,
-    RandomPhotometricDistort,
 )
 from tqdm.auto import tqdm
 
@@ -196,7 +194,12 @@ def main(args):
         val_set = RecognitionDataset(
             img_folder=os.path.join(args.val_path, "images"),
             labels_path=os.path.join(args.val_path, "labels.json"),
-            img_transforms=T.Resize((args.input_size, 4 * args.input_size), preserve_aspect_ratio=True),
+            img_transforms=Compose([
+                T.Resize((args.input_size, 4 * args.input_size), preserve_aspect_ratio=True),
+                # Ensure we have a 90% split of white-background images
+                T.RandomApply(T.ColorInversion(), 0.9),
+                RandomGrayscale(p=0.1),
+            ]),
         )
     else:
         val_hash = None
@@ -211,6 +214,7 @@ def main(args):
                 T.Resize((args.input_size, 4 * args.input_size), preserve_aspect_ratio=True),
                 # Ensure we have a 90% split of white-background images
                 T.RandomApply(T.ColorInversion(), 0.9),
+                RandomGrayscale(p=0.1),
             ]),
         )
 
@@ -281,11 +285,6 @@ def main(args):
                 # Augmentations
                 T.RandomApply(T.ColorInversion(), 0.1),
                 RandomGrayscale(p=0.1),
-                RandomPhotometricDistort(p=0.1),
-                T.RandomApply(T.RandomShadow(), p=0.4),
-                T.RandomApply(T.GaussianNoise(mean=0, std=0.1), 0.1),
-                T.RandomApply(T.GaussianBlur(sigma=(0.5, 1.5)), 0.3),
-                RandomPerspective(distortion_scale=0.2, p=0.3),
             ]),
         )
         if len(parts) > 1:
@@ -307,11 +306,6 @@ def main(args):
                 # Ensure we have a 90% split of white-background images
                 T.RandomApply(T.ColorInversion(), 0.9),
                 RandomGrayscale(p=0.1),
-                RandomPhotometricDistort(p=0.1),
-                T.RandomApply(T.RandomShadow(), p=0.4),
-                T.RandomApply(T.GaussianNoise(mean=0, std=0.1), 0.1),
-                T.RandomApply(T.GaussianBlur(sigma=(0.5, 1.5)), 0.3),
-                RandomPerspective(distortion_scale=0.2, p=0.3),
             ]),
         )
 
