@@ -108,20 +108,23 @@ def fit_one_epoch(model, train_loader, batch_transforms, optimizer, scheduler, a
         scaler = torch.amp.GradScaler('cuda')
 
     model.train()
+
+    train_loss, batch_cnt = 0, 0
+
     # Iterate over the batches of the dataset
-    pbar = tqdm(train_loader, position=1)
+    pbar = tqdm(train_loader)
     for images, targets in pbar:
         if torch.cuda.is_available():
             images = images.cuda()
         images = batch_transforms(images)
 
-        train_loss = model(images, targets)["loss"]
+        # _loss = model(images, targets)["loss"]
 
         optimizer.zero_grad()
         if amp:
             with torch.amp.autocast('cuda'):
-                train_loss = model(images, targets)["loss"]
-            scaler.scale(train_loss).backward()
+                _loss = model(images, targets)["loss"]
+            scaler.scale(_loss).backward()
             # Gradient clipping
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
@@ -129,14 +132,20 @@ def fit_one_epoch(model, train_loader, batch_transforms, optimizer, scheduler, a
             scaler.step(optimizer)
             scaler.update()
         else:
-            train_loss = model(images, targets)["loss"]
-            train_loss.backward()
+            _loss = model(images, targets)["loss"]
+            _loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
             optimizer.step()
 
+        _loss = _loss.item()
+        train_loss += _loss
+        batch_cnt += 1
+
         scheduler.step()
 
-        pbar.set_description(f"Training loss: {train_loss.item():.6}")
+        pbar.set_description(f"Train loss {_loss:.6f}")
+
+    return train_loss / batch_cnt
 
 
 @torch.no_grad()
@@ -147,7 +156,7 @@ def evaluate(model, val_loader, batch_transforms, val_metric, amp=False):
     val_metric.reset()
     # Validation loop
     val_loss, batch_cnt = 0, 0
-    p = tqdm(val_loader, "Validation loss: 0.00000")
+    p = tqdm(val_loader)
     for images, targets in p:
         if torch.cuda.is_available():
             images = images.cuda()
@@ -168,7 +177,7 @@ def evaluate(model, val_loader, batch_transforms, val_metric, amp=False):
         val_loss += _loss
         batch_cnt += 1
 
-        p.set_description(f"Validation loss: {_loss:.6f}")
+        p.set_description(f"Valid loss {_loss:.6f}")
 
     val_loss /= batch_cnt
     result = val_metric.summary()
@@ -394,13 +403,16 @@ def main(args):
             },
         )
 
+    print()
+
     # Create loss queue
     min_loss = np.inf
     # Training loop
     if args.early_stop:
         early_stopper = EarlyStopper(patience=args.early_stop_epochs, min_delta=args.early_stop_delta)
     for epoch in range(args.epochs):
-        fit_one_epoch(model, train_loader, batch_transforms, optimizer, scheduler, amp=args.amp)
+        print(f"Epoch {epoch + 1}/{args.epochs}")
+        train_loss = fit_one_epoch(model, train_loader, batch_transforms, optimizer, scheduler, amp=args.amp)
 
         # Validation loop at the end of each epoch
         val_loss, exact_match, partial_match = evaluate(model, val_loader, batch_transforms, val_metric, amp=args.amp)
@@ -409,9 +421,10 @@ def main(args):
             torch.save(model.state_dict(), Path(args.output_dir) / f"{exp_name}.pt")
             min_loss = val_loss
         print(
-            f"Epoch {epoch + 1}/{args.epochs} - Validation loss: {val_loss:.6} "
+            f"Train loss: {train_loss:.6}; Val loss: {val_loss:.6} "
             f"(Exact: {exact_match:.2%} | Partial: {partial_match:.2%})"
         )
+        print()
         # W&B
         if args.wb:
             wandb.log({
