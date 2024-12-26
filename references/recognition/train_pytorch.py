@@ -147,7 +147,8 @@ def evaluate(model, val_loader, batch_transforms, val_metric, amp=False):
     val_metric.reset()
     # Validation loop
     val_loss, batch_cnt = 0, 0
-    for images, targets in tqdm(val_loader):
+    p = tqdm(val_loader, "Validation loss: 0.00000")
+    for images, targets in p:
         if torch.cuda.is_available():
             images = images.cuda()
         images = batch_transforms(images)
@@ -163,8 +164,11 @@ def evaluate(model, val_loader, batch_transforms, val_metric, amp=False):
             words = []
         val_metric.update(targets, words)
 
-        val_loss += out["loss"].item()
+        _loss = out["loss"].item()
+        val_loss += _loss
         batch_cnt += 1
+
+        p.set_description(f"Validation loss: {_loss:.6f}")
 
     val_loss /= batch_cnt
     result = val_metric.summary()
