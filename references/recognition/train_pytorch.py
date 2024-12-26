@@ -23,7 +23,7 @@ from torchvision.transforms.v2 import (
     Normalize,
     RandomGrayscale,
 )
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from doctr import transforms as T
 from doctr.datasets import VOCABS, RecognitionDataset, WordGenerator
@@ -109,22 +109,21 @@ def fit_one_epoch(model, train_loader, batch_transforms, optimizer, scheduler, a
 
     model.train()
 
-    train_loss, batch_cnt = 0, 0
+    train_loss = []
 
     # Iterate over the batches of the dataset
-    pbar = tqdm(train_loader)
+    pbar = tqdm(train_loader, delay=2)
     for images, targets in pbar:
         if torch.cuda.is_available():
             images = images.cuda()
         images = batch_transforms(images)
 
-        # _loss = model(images, targets)["loss"]
-
         optimizer.zero_grad()
         if amp:
-            with torch.amp.autocast('cuda'):
-                _loss = model(images, targets)["loss"]
-            scaler.scale(_loss).backward()
+            with torch.autocast('cuda'):
+                loss = model(images, targets)["loss"]
+            _loss = loss.detach().item()
+            scaler.scale(loss).backward()
             # Gradient clipping
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
@@ -132,20 +131,19 @@ def fit_one_epoch(model, train_loader, batch_transforms, optimizer, scheduler, a
             scaler.step(optimizer)
             scaler.update()
         else:
-            _loss = model(images, targets)["loss"]
-            _loss.backward()
+            loss = model(images, targets)["loss"]
+            _loss = loss.detach().item()
+            loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
             optimizer.step()
 
-        _loss = _loss.item()
-        train_loss += _loss
-        batch_cnt += 1
+        train_loss.append(_loss)
 
         scheduler.step()
 
         pbar.set_description(f"Train loss {_loss:.6f}")
 
-    return train_loss / batch_cnt
+    return np.average(train_loss)
 
 
 @torch.no_grad()
@@ -156,7 +154,7 @@ def evaluate(model, val_loader, batch_transforms, val_metric, amp=False):
     val_metric.reset()
     # Validation loop
     val_loss, batch_cnt = 0, 0
-    p = tqdm(val_loader)
+    p = tqdm(val_loader, delay=2)
     for images, targets in p:
         if torch.cuda.is_available():
             images = images.cuda()
@@ -421,7 +419,7 @@ def main(args):
             torch.save(model.state_dict(), Path(args.output_dir) / f"{exp_name}.pt")
             min_loss = val_loss
         print(
-            f"Train loss: {train_loss:.6}; Val loss: {val_loss:.6} "
+            f"Train loss: {train_loss:.6f}; Val loss: {val_loss:.6f} "
             f"(Exact: {exact_match:.2%} | Partial: {partial_match:.2%})"
         )
         print()
