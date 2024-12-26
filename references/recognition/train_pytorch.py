@@ -31,6 +31,8 @@ from doctr.models import login_to_hub, push_to_hf_hub, recognition
 from doctr.utils.metrics import TextMatch
 from utils import EarlyStopper, plot_recorder, plot_samples
 
+torch.set_float32_matmul_precision('high')
+
 
 def record_lr(
     model: torch.nn.Module,
@@ -104,9 +106,6 @@ def record_lr(
 
 
 def fit_one_epoch(model, train_loader, batch_transforms, optimizer, scheduler, amp=False):
-    if amp:
-        scaler = torch.amp.GradScaler('cuda')
-
     model.train()
 
     train_loss = []
@@ -120,22 +119,15 @@ def fit_one_epoch(model, train_loader, batch_transforms, optimizer, scheduler, a
 
         optimizer.zero_grad()
         if amp:
-            with torch.autocast('cuda'):
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
                 loss = model(images, targets)["loss"]
-            _loss = loss.detach().item()
-            scaler.scale(loss).backward()
-            # Gradient clipping
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
-            # Update the params
-            scaler.step(optimizer)
-            scaler.update()
         else:
             loss = model(images, targets)["loss"]
-            _loss = loss.detach().item()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
-            optimizer.step()
+
+        _loss = loss.detach().item()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
+        optimizer.step()
 
         train_loss.append(_loss)
 
@@ -160,7 +152,7 @@ def evaluate(model, val_loader, batch_transforms, val_metric, amp=False):
             images = images.cuda()
         images = batch_transforms(images)
         if amp:
-            with torch.amp.autocast('cuda'):
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
                 out = model(images, targets, return_preds=True)
         else:
             out = model(images, targets, return_preds=True)
